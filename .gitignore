@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+venv/
+
+# env
+.env
+.env.local
+
+# next
+.next/
+out/
+
+# python
+__pycache__/
+*.pyc
+
+# misc
+.DS_Store
