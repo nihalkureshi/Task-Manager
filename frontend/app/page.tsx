@@ -154,13 +154,26 @@ export default function Home() {
   }, [syncUserWithBackend]);
 
   const loginWithGoogle = async () => {
+
     setGoogleLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
+  
+    const { error } =
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+  
+        options: {
+          redirectTo:
+            "https://task-manager-q6yc6l0ys-nihal-k-projects11.vercel.app",
+        },
+      });
+  
     if (error) {
-      showToast(error.message, "error");
+  
+      showToast(
+        error.message,
+        "error"
+      );
+  
       setGoogleLoading(false);
     }
   };
