@@ -1,8 +1,9 @@
 "use client";
 
 import axios from "axios";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { getApiUrl } from "@/lib/api";
 import {
   CheckCircle, LogOut, Plus, User, Mail, ClipboardList,
   Loader2, Menu, X, Heart,
@@ -33,8 +34,6 @@ type DbUser = {
 
 type AssignMode = "member" | "email";
 type AuthMode = "signin" | "signup";
-
-const API = "http://localhost:5000";
 
 const inputCls =
   "w-full border border-slate-200 rounded-xl px-4 py-3 text-base text-slate-800 placeholder:text-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400";
@@ -88,22 +87,30 @@ export default function Home() {
   const [notes, setNotes] = useState("");
   const [formData, setFormData] = useState({ title: "", description: "", assigned_to: "" });
   const [createAssignMode, setCreateAssignMode] = useState<AssignMode>("member");
+  const [backendOnline, setBackendOnline] = useState(true);
+  const syncingUserRef = useRef(false);
+
+  const apiUrl = getApiUrl();
 
   const fetchUsers = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/tasks/users`);
+      const response = await axios.get(`${getApiUrl()}/tasks/users`, { timeout: 10000 });
       setUsers(Array.isArray(response.data) ? response.data : []);
+      setBackendOnline(true);
     } catch (error) {
       console.error("Failed to fetch users:", error);
+      setBackendOnline(false);
     }
   }, []);
 
   const fetchTasks = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/tasks`);
+      const response = await axios.get(`${getApiUrl()}/tasks`, { timeout: 10000 });
       setTasks(Array.isArray(response.data) ? response.data : []);
+      setBackendOnline(true);
     } catch (error) {
       console.error("Failed to fetch tasks:", error);
+      setBackendOnline(false);
     }
   }, []);
 
@@ -112,35 +119,39 @@ export default function Home() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  const persistUser = useCallback(async (loggedUser: AppUser) => {
-    await axios.post(`${API}/auth/save-user`, loggedUser).catch(console.error);
+  const syncUserWithBackend = useCallback(async (loggedUser: AppUser) => {
+    if (syncingUserRef.current) return;
+    syncingUserRef.current = true;
+
     setUser(loggedUser);
-    await Promise.all([fetchUsers(), fetchTasks()]);
-  }, [fetchUsers, fetchTasks]);
+
+    try {
+      await axios.post(`${getApiUrl()}/auth/save-user`, loggedUser, { timeout: 10000 });
+      setBackendOnline(true);
+      await Promise.all([fetchUsers(), fetchTasks()]);
+    } catch (error) {
+      console.error("Backend sync failed:", error);
+      setBackendOnline(false);
+      showToast("Logged in, but backend is unreachable. Start the Flask server on port 5000.", "error");
+    } finally {
+      syncingUserRef.current = false;
+    }
+  }, [fetchUsers, fetchTasks, showToast]);
 
   useEffect(() => {
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        await persistUser(sessionToUser(session));
-      }
-      setLoading(false);
-    };
-
-    init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        await persistUser(sessionToUser(session));
-      } else {
+        await syncUserWithBackend(sessionToUser(session));
+      } else if (event === "SIGNED_OUT") {
         setUser(null);
         setTasks([]);
         setUsers([]);
       }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [persistUser]);
+  }, [syncUserWithBackend]);
 
   const loginWithGoogle = async () => {
     setGoogleLoading(true);
@@ -197,12 +208,10 @@ export default function Home() {
           setAuthMode("signin");
           return;
         }
-        await persistUser(sessionToUser({ user: data.user! }));
         showToast("Welcome! Account created successfully.");
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        await persistUser(sessionToUser({ user: data.user }));
         showToast("Welcome back!");
       }
       setAuthForm({ name: "", email: "", password: "", confirmPassword: "" });
@@ -247,7 +256,7 @@ export default function Home() {
 
     setCreating(true);
     try {
-      const res = await axios.post(`${API}/tasks/create`, {
+      const res = await axios.post(`${apiUrl}/tasks/create`, {
         ...formData,
         assigned_to: formData.assigned_to.trim().toLowerCase(),
         created_by: user?.email,
@@ -281,7 +290,7 @@ export default function Home() {
 
     try {
       await axios.put(
-        `${API}/tasks/update/${selectedTask.id}`,
+        `${apiUrl}/tasks/update/${selectedTask.id}`,
         { ...editFormData, assigned_to: editFormData.assigned_to.trim().toLowerCase() },
         { headers: { "X-User-Email": user?.email ?? "" } }
       );
@@ -306,7 +315,7 @@ export default function Home() {
 
     setDeletingId(id);
     try {
-      await axios.delete(`${API}/tasks/delete/${id}`, {
+      await axios.delete(`${apiUrl}/tasks/delete/${id}`, {
         headers: { "X-User-Email": user?.email ?? "" },
       });
       await fetchTasks();
@@ -330,7 +339,7 @@ export default function Home() {
     if (!selectedTask) return;
     try {
       await axios.patch(
-        `${API}/tasks/notes/${selectedTask.id}`,
+        `${apiUrl}/tasks/notes/${selectedTask.id}`,
         { notes },
         { headers: { "X-User-Email": user?.email ?? "" } }
       );
@@ -351,7 +360,7 @@ export default function Home() {
     setCompletingId(id);
     try {
       const res = await axios.patch(
-        `${API}/tasks/complete/${id}`,
+        `${apiUrl}/tasks/complete/${id}`,
         {},
         { headers: { "X-User-Email": user?.email ?? "" } }
       );
@@ -623,6 +632,13 @@ export default function Home() {
       )}
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8">
+        {!backendOnline && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 text-base">
+            Backend is offline. Run <code className="font-mono text-sm">python app.py</code> in the{" "}
+            <code className="font-mono text-sm">backend</code> folder ({apiUrl}).
+          </div>
+        )}
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard title="Total Tasks" value={tasks.length} />
           <StatCard title="My Tasks" value={myTasks.length} />
