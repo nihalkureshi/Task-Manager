@@ -1,65 +1,277 @@
-import Image from "next/image";
+"use client";
+
+import axios from "axios";
+import { GoogleLogin } from "@react-oauth/google";
+import { useEffect, useState } from "react";
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+
+  const [user, setUser] = useState<any>(null);
+
+  const [users, setUsers] = useState<any[]>([]);
+
+  const [tasks, setTasks] = useState<any[]>([]);
+
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    assigned_to: "",
+  });
+
+
+  useEffect(() => {
+
+    const storedUser = localStorage.getItem("user");
+
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+
+      fetchUsers();
+      fetchTasks();
+    }
+
+  }, []);
+
+
+  const fetchUsers = async () => {
+
+    const response = await axios.get(
+      "http://localhost:5000/tasks/users"
+    );
+
+    setUsers(response.data);
+  };
+
+
+  const fetchTasks = async () => {
+
+    const response = await axios.get(
+      "http://localhost:5000/tasks"
+    );
+
+    setTasks(response.data);
+  };
+
+
+  const handleGoogleLogin = async (credentialResponse: any) => {
+
+    try {
+
+      const response = await axios.post(
+        "http://localhost:5000/auth/google",
+        {
+          token: credentialResponse.credential,
+        }
+      );
+
+      localStorage.setItem(
+        "user",
+        JSON.stringify(response.data.user)
+      );
+
+      setUser(response.data.user);
+
+      fetchUsers();
+      fetchTasks();
+
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+
+  const createTask = async () => {
+
+    if (
+      !formData.title ||
+      !formData.description ||
+      !formData.assigned_to
+    ) {
+      alert("Please fill all fields");
+      return;
+    }
+
+    await axios.post(
+      "http://localhost:5000/tasks/create",
+      {
+        ...formData,
+        created_by: user.email,
+      }
+    );
+
+    alert("Task Created");
+
+    setFormData({
+      title: "",
+      description: "",
+      assigned_to: "",
+    });
+
+    fetchTasks();
+  };
+
+
+  const completeTask = async (id: number) => {
+
+    await axios.patch(
+      `http://localhost:5000/tasks/complete/${id}`
+    );
+
+    fetchTasks();
+  };
+
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <GoogleLogin
+          onSuccess={handleGoogleLogin}
+          onError={() => console.log("Login Failed")}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+      </div>
+    );
+  }
+
+
+  return (
+    <div className="p-10">
+
+      <div className="flex justify-between mb-10">
+        <div>
+          <h1 className="text-3xl font-bold">
+            Task Dashboard
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+
+          <p>{user.name}</p>
+          <p>{user.email}</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <button
+          className="bg-red-500 text-white px-4 py-2 rounded"
+          onClick={() => {
+            localStorage.removeItem("user");
+            location.reload();
+          }}
+        >
+          Logout
+        </button>
+      </div>
+
+
+      <div className="border p-5 rounded mb-10">
+
+        <h2 className="text-xl font-bold mb-4">
+          Create Task
+        </h2>
+
+        <input
+          type="text"
+          placeholder="Title"
+          className="border p-2 w-full mb-3"
+          value={formData.title}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              title: e.target.value,
+            })
+          }
+        />
+
+        <textarea
+          placeholder="Description"
+          className="border p-2 w-full mb-3"
+          value={formData.description}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              description: e.target.value,
+            })
+          }
+        />
+
+        <select
+          className="border p-2 w-full mb-3"
+          value={formData.assigned_to}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              assigned_to: e.target.value,
+            })
+          }
+        >
+          <option value="">Select User</option>
+
+          {users.map((u) => (
+            <option
+              key={u.id}
+              value={u.email}
+            >
+              {u.name}
+            </option>
+          ))}
+        </select>
+
+        <button
+          className="bg-black text-white px-5 py-2 rounded"
+          onClick={createTask}
+        >
+          Create Task
+        </button>
+      </div>
+
+
+      <div>
+
+        <h2 className="text-2xl font-bold mb-5">
+          Tasks
+        </h2>
+
+        <div className="grid gap-5">
+
+          {tasks.map((task) => (
+
+            <div
+              key={task.id}
+              className="border p-5 rounded"
+            >
+
+              <h3 className="text-xl font-bold">
+                {task.title}
+              </h3>
+
+              <p>{task.description}</p>
+
+              <p className="mt-2">
+                Assigned To:
+                {" "}
+                {task.assigned_to}
+              </p>
+
+              <p>
+                Status:
+                {" "}
+                {task.status}
+              </p>
+
+              {
+                task.status !== "completed" && (
+                  <button
+                    className="bg-green-500 text-white px-4 py-2 mt-3 rounded"
+                    onClick={() => completeTask(task.id)}
+                  >
+                    Mark Complete
+                  </button>
+                )
+              }
+
+            </div>
+
+          ))}
+
         </div>
-      </main>
+
+      </div>
+
     </div>
   );
 }
