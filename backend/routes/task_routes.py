@@ -1,8 +1,16 @@
+import re
+
 from flask import Blueprint, request, jsonify
 from utils.supabase_client import supabase
 from services.email_service import send_email
 
 task_bp = Blueprint("tasks", __name__)
+
+EMAIL_REGEX = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def is_valid_email(email):
+    return bool(email and EMAIL_REGEX.match(email))
 
 
 def verify_task_ownership(task_id, user_email):
@@ -35,6 +43,9 @@ def create_task():
     if not data.get("title") or not data.get("description") or not data.get("assigned_to") or not data.get("created_by"):
         return jsonify({"error": "Missing required fields"}), 400
     
+    if not is_valid_email(data.get("assigned_to")):
+        return jsonify({"error": "Invalid assignee email address"}), 400
+
     # Prevent self-assignment (optional but good practice)
     if data.get("assigned_to") == data.get("created_by"):
         return jsonify({"error": "Cannot assign task to yourself"}), 400
@@ -50,25 +61,23 @@ def create_task():
     
     result = supabase.table("tasks").insert(task).execute()
     
-    # Send email notification
-    send_email(
-        data.get("assigned_to"),
+    assignee = data.get("assigned_to")
+    email_sent = send_email(
+        assignee,
         "New Task Assigned",
-        f"""
-        You have been assigned a new task.
-        
-        Title: {data.get("title")}
-        
-        Description:
-        {data.get("description")}
-        
-        Created by: {data.get("created_by")}
-        """
+        "You have been assigned a new task.",
+        {
+            "Title": data.get("title"),
+            "Description": data.get("description"),
+            "Created by": data.get("created_by"),
+        },
     )
-    
+
     return jsonify({
         "message": "Task created",
-        "task": result.data[0] if result.data else None
+        "task": result.data[0] if result.data else None,
+        "email_sent": email_sent,
+        "email_to": assignee if email_sent else None,
     })
 
 
@@ -93,6 +102,9 @@ def update_task(task_id):
     if not data.get("title") or not data.get("description") or not data.get("assigned_to"):
         return jsonify({"error": "Missing required fields"}), 400
     
+    if not is_valid_email(data.get("assigned_to")):
+        return jsonify({"error": "Invalid assignee email address"}), 400
+
     # Prevent self-assignment
     if data.get("assigned_to") == user_email:
         return jsonify({"error": "Cannot assign task to yourself"}), 400
@@ -192,22 +204,28 @@ def complete_task(task_id):
         .execute()
     )
     
-    # Send completion email to assigned person
-    send_email(
-        task_data["assigned_to"],
-        "Task Completed",
-        f"""
-        Your task has been marked as completed.
-        
-        Title: {task_data["title"]}
-        
-        Completed by: {user_email}
-        """
+    # Notify the other party: creator when assignee completes, assignee when creator completes
+    notify_email = (
+        task_data["created_by"]
+        if user_email == task_data["assigned_to"]
+        else task_data["assigned_to"]
     )
-    
+
+    email_sent = send_email(
+        notify_email,
+        "Task Completed",
+        "A task has been marked as completed.",
+        {
+            "Title": task_data["title"],
+            "Completed by": user_email,
+        },
+    )
+
     return jsonify({
         "message": "Task completed",
-        "task": updated.data[0] if updated.data else None
+        "task": updated.data[0] if updated.data else None,
+        "email_sent": email_sent,
+        "email_to": notify_email if email_sent else None,
     })
 
 
