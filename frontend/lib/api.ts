@@ -1,22 +1,11 @@
 export function getApiUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "");
 
-  if (typeof window !== "undefined") {
-    const { protocol, hostname } = window.location;
-    const isLocalEnv = !fromEnv || /localhost|127\.0\.0\.1/.test(fromEnv);
-    const isLanAccess = hostname !== "localhost" && hostname !== "127.0.0.1";
-
-    // LAN/mobile access: talk to backend on the same host, not device-local localhost.
-    if (isLocalEnv && isLanAccess) {
-      return `${protocol}//${hostname}:5000`;
-    }
-
-    if (fromEnv) {
-      return fromEnv;
-    }
-
-    return `${protocol}//${hostname}:5000`;
+  // Explicit override (e.g. separate Flask server during local dev)
+  if (fromEnv) {
+    return fromEnv;
   }
 
-  return fromEnv || "http://localhost:5000";
+  // Default: same-origin Next.js API routes (Vercel + local `npm run dev`)
+  return "/api";
 }

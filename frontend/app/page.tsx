@@ -435,7 +435,7 @@ export default function Home() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-900 rounded-2xl mb-5 shadow-lg">
               <ClipboardList className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">HairDrama Task Manager</h1>
+            <h1 className="text-3xl font-bold text-slate-900 mb-2"> Task Manager</h1>
             <p className="text-slate-500 text-lg">Organize tasks and notify your team by email</p>
           </div>
 
@@ -572,7 +572,7 @@ export default function Home() {
             </div>
             <div>
               <span className="font-bold text-lg text-slate-900 block leading-tight">Task Manager</span>
-              <span className="text-xs text-slate-400 hidden sm:block">HairDrama</span>
+              <span className="text-xs text-slate-400 hidden sm:block"></span>
             </div>
           </div>
 
@@ -634,8 +634,8 @@ export default function Home() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8">
         {!backendOnline && (
           <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 text-base">
-            Backend is offline. Run <code className="font-mono text-sm">python app.py</code> in the{" "}
-            <code className="font-mono text-sm">backend</code> folder ({apiUrl}).
+            API is unreachable ({apiUrl}). Check your server env vars on Vercel or run{" "}
+            <code className="font-mono text-sm">npm run dev</code> locally.
           </div>
         )}
 
@@ -1001,11 +1001,11 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <ClipboardList className="w-5 h-5 text-slate-500" />
-            <span className="text-base text-slate-500 font-medium">HairDrama Task Manager</span>
+            <span className="text-base text-slate-500 font-medium"> Task Manager</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-slate-400">
-            <Heart className="w-4 h-4" />
-            <span>Built for your team</span>
+            
+            <span>(Nihal Kureshi)</span>
           </div>
         </div>
       </footer>
